@@ -1,0 +1,382 @@
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --border: #334155;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --success: #22c55e;
+  --success-bg: #052e1f;
+  --error: #ef4444;
+  --error-bg: #450a0a;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Container centered on page with max-width and auto margins */
+.container {
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+  box-sizing: border-box;
+}
+
+/* Header & Titles */
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+h1, h2, h3 {
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.header h1 {
+  font-size: 2.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-top: 0;
+}
+
+/* Layout Grid */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Form Card & Content Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.card h2 {
+  font-size: 1.25rem;
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Form Controls & Labels */
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+label {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+select,
+input[type="number"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+select:focus,
+input[type="number"]:focus {
+  border-color: var(--accent);
+}
+
+select option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.stock-hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* Buttons */
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 1.5rem;
+}
+
+.btn {
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  width: 100%;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--muted);
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Alert Notification */
+.alert {
+  margin-top: 1rem;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.alert-danger {
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid var(--error);
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  color: var(--muted);
+  padding: 2.5rem 1rem;
+}
+
+.empty-state .hint {
+  font-size: 13px;
+  margin-top: 0.5rem;
+}
+
+/* Result Area - Confirmed / Rejected */
+.result {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 4px solid transparent;
+  font-size: 14px;
+}
+
+.result.confirmed {
+  background: var(--success-bg);
+  color: var(--success);
+  border-left-color: var(--success);
+}
+
+.result.rejected {
+  background: var(--error-bg);
+  color: var(--error);
+  border-left-color: var(--error);
+}
+
+/* Result Inner Elements */
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.status-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.status-badge {
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.badge-confirmed {
+  background: var(--success);
+  color: #0f172a;
+}
+
+.badge-rejected {
+  background: var(--error);
+  color: #ffffff;
+}
+
+.result-field {
+  margin-bottom: 1rem;
+}
+
+.result-field strong {
+  color: var(--text);
+}
+
+.reason-text {
+  margin: 0.35rem 0 0 0;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+/* Returned Inventory Snapshot Card */
+.snapshot-card {
+  margin-top: 1rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+.snapshot-card h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.snapshot-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.snapshot-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  width: 40%;
+  padding: 4px 0;
+}
+
+.snapshot-table td {
+  padding: 4px 0;
+  color: var(--text);
+}
+
+.snapshot-table code,
+.inventory-table code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.stock-ok {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.stock-zero {
+  color: var(--error);
+  font-weight: 700;
+}
+
+/* Live Inventory Table */
+.inventory-summary {
+  margin-top: 1rem;
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  margin-top: 0.75rem;
+}
+
+.inventory-table th,
+.inventory-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inventory-table th {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.in-stock {
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.out-of-stock {
+  background: var(--error-bg);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.empty-text {
+  color: var(--muted);
+  text-align: center;
+  padding: 1rem 0;
+}
