@@ -233,19 +233,15 @@ curl -X POST http://localhost:8080/api/orders \
 
 ## 7. Network Tab Evidence
 
-*Paste your browser Developer Tools Network Tab screenshots in the placeholders below:*
-
 ### Confirmed Order
-<!-- Paste confirmed order network tab screenshot here -->
-> _Screenshot Placeholder: Inspect the network call for `POST /api/orders` showing HTTP 200 OK and payload `{ "status": "CONFIRMED", ... }`._
+![Confirmed Order Network Tab Evidence](evidence/Screenshot%202026-09-10%20201317.png)
 
 ### Rejected Order
-<!-- Paste rejected order network tab screenshot here -->
-> _Screenshot Placeholder: Inspect the network call for `POST /api/orders` showing HTTP 200 OK and payload `{ "status": "REJECTED", ... }`._
+![Rejected Order Network Tab Evidence](evidence/Screenshot%202026-09-10%20201228.png)
 
 ---
 
-### 8. Reflection
+## 8. Reflection
 
 ### 1. In-process vs. microservices for Order/Inventory
 When both modules run in one Spring Boot process, OrderService calls InventoryService as a plain Java method. The JVM gives me typed synchronous calls, one @Transactional boundary covering both the stock decrement and the order insert, full stack traces on failure, and no serialization, timeouts, retries, or service discovery. I can debug the whole flow in one IDE session. If Inventory became a separate microservice, I would have to add all of that back: an HTTP or gRPC client, DTOs and JSON at the wire, timeouts, retry and backoff, circuit breakers, service discovery, service-to-service auth, and distributed tracing. Most importantly, one local transaction would no longer span both writes, so I would need a saga or outbox pattern, or compensating logic for partial failures. Splitting trades a simple synchronous call for a network hop plus a pile of reliability plumbing.
