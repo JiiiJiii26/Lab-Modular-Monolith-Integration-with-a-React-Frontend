@@ -2,6 +2,8 @@ package edu.cit.pena.shop;
 
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * JPA entity representing an order placed in the system.
@@ -16,12 +18,6 @@ public class Order {
     @Column(name = "order_id")
     private Long orderId;
 
-    @Column(name = "product_id", nullable = false)
-    private String productId;
-
-    @Column(name = "quantity", nullable = false)
-    private int quantity;
-
     @Column(name = "status", nullable = false)
     private String status;
 
@@ -31,12 +27,13 @@ public class Order {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<OrderItem> items = new ArrayList<>();
+
     public Order() {
     }
 
-    public Order(String productId, int quantity, String status, String reason) {
-        this.productId = productId;
-        this.quantity = quantity;
+    public Order(String status, String reason) {
         this.status = status;
         this.reason = reason;
         this.createdAt = OffsetDateTime.now();
@@ -49,28 +46,17 @@ public class Order {
         }
     }
 
+    public void addItem(String productId, int quantity) {
+        OrderItem item = new OrderItem(this, productId, quantity);
+        this.items.add(item);
+    }
+
     public Long getOrderId() {
         return orderId;
     }
 
     public void setOrderId(Long orderId) {
         this.orderId = orderId;
-    }
-
-    public String getProductId() {
-        return productId;
-    }
-
-    public void setProductId(String productId) {
-        this.productId = productId;
-    }
-
-    public int getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(int quantity) {
-        this.quantity = quantity;
     }
 
     public String getStatus() {
@@ -95,5 +81,13 @@ public class Order {
 
     public void setCreatedAt(OffsetDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public List<OrderItem> getItems() {
+        return items;
+    }
+
+    public void setItems(List<OrderItem> items) {
+        this.items = items;
     }
 }

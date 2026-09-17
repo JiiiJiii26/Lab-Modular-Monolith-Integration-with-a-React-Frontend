@@ -8,12 +8,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
+@Transactional
 class OrderServiceTest {
 
     @Autowired
@@ -35,47 +37,89 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("Should confirm order and decrease inventory when stock is sufficient")
-    void testPlaceOrderConfirmed() {
-        InventoryItem beforeItem = inventoryService.getItem("P100");
-        assertNotNull(beforeItem);
-        int stockBefore = beforeItem.getStock();
-        assertEquals(25, stockBefore);
+    @DisplayName("Should confirm multi-item order and decrease inventory when all items have sufficient stock")
+    void testPlaceMultiItemOrderConfirmed() {
+        // Initial inventory: P100=25, P200=10
+        OrderRequest request = new OrderRequest(List.of(
+                new OrderItemRequest("P100", 2),
+                new OrderItemRequest("P200", 1)
+        ));
 
-        OrderRequest request = new OrderRequest("P100", 2);
         OrderResponse response = orderService.placeOrder(request);
 
         assertEquals("CONFIRMED", response.status());
         assertNotNull(response.reason());
-        assertNotNull(response.inventory());
-        assertEquals("P100", response.inventory().productId());
-        assertEquals(23, response.inventory().stock());
+        assertEquals(2, response.items().size());
+        assertEquals("RESERVED", response.items().get(0).outcome());
+        assertEquals("RESERVED", response.items().get(1).outcome());
 
-        // Verify order persisted in database
+        // Check inventory decreased
+        assertEquals(23, inventoryService.getItem("P100").getStock());
+        assertEquals(9, inventoryService.getItem("P200").getStock());
+
+        // Verify order persisted in database with order_items rows
         List<Order> orders = orderRepository.findAll();
         assertEquals(1, orders.size());
-        Order latestOrder = orders.get(0);
-        assertEquals("P100", latestOrder.getProductId());
-        assertEquals(2, latestOrder.getQuantity());
-        assertEquals("CONFIRMED", latestOrder.getStatus());
+        Order savedOrder = orders.get(0);
+        assertEquals("CONFIRMED", savedOrder.getStatus());
+        assertEquals(2, savedOrder.getItems().size());
     }
 
     @Test
-    @DisplayName("Should reject order when stock is insufficient (P300 with 0 stock)")
-    void testPlaceOrderRejected() {
-        OrderRequest request = new OrderRequest("P300", 1);
+    @DisplayName("Should reject multi-item order if ANY item exceeds stock and write NO order_items rows")
+    void testPlaceMultiItemOrderRejected() {
+        // P100=25 (sufficient), P300=0 (insufficient)
+        OrderRequest request = new OrderRequest(List.of(
+                new OrderItemRequest("P100", 1),
+                new OrderItemRequest("P300", 1)
+        ));
+
         OrderResponse response = orderService.placeOrder(request);
 
         assertEquals("REJECTED", response.status());
         assertTrue(response.reason().toLowerCase().contains("insufficient"));
-        assertNotNull(response.inventory());
-        assertEquals("P300", response.inventory().productId());
-        assertEquals(0, response.inventory().stock());
+        assertEquals(2, response.items().size());
+        assertEquals("REJECTED", response.items().get(0).outcome());
+        assertEquals("REJECTED", response.items().get(1).outcome());
 
-        // Verify rejected order is also logged in database
+        // Critical all-or-nothing check: P100 stock must NOT be decremented!
+        assertEquals(25, inventoryService.getItem("P100").getStock());
+        assertEquals(0, inventoryService.getItem("P300").getStock());
+
+        // Critical rule: REJECTED order persisted but NO order_items rows written
         List<Order> orders = orderRepository.findAll();
         assertEquals(1, orders.size());
-        Order latestOrder = orders.get(0);
-        assertEquals("REJECTED", latestOrder.getStatus());
+        Order rejectedOrder = orders.get(0);
+        assertEquals("REJECTED", rejectedOrder.getStatus());
+        assertTrue(rejectedOrder.getItems().isEmpty(), "Rejected order must have NO order_items rows persisted");
+    }
+
+    @Test
+    @DisplayName("Should cancel order, restock inventory, and return 409 if cancelled again")
+    void testCancelOrderAndRestock() {
+        // Place an initial order of 5 units of P200 (starts at 10 -> drops to 5)
+        OrderRequest request = new OrderRequest(List.of(new OrderItemRequest("P200", 5)));
+        OrderResponse placeResponse = orderService.placeOrder(request);
+        assertEquals("CONFIRMED", placeResponse.status());
+        assertEquals(5, inventoryService.getItem("P200").getStock());
+
+        List<Order> orders = orderRepository.findAll();
+        Long orderId = orders.get(0).getOrderId();
+
+        // Cancel order
+        CancelOrderResult cancelResult = orderService.cancelOrder(orderId);
+        assertEquals(CancelOrderResult.Status.SUCCESS, cancelResult.status());
+        assertEquals("CANCELLED", cancelResult.order().status());
+
+        // Verify stock restocked back to 10
+        assertEquals(10, inventoryService.getItem("P200").getStock());
+
+        // Attempt to cancel again -> must return ALREADY_CANCELLED
+        CancelOrderResult secondCancel = orderService.cancelOrder(orderId);
+        assertEquals(CancelOrderResult.Status.ALREADY_CANCELLED, secondCancel.status());
+
+        // Non-existent order cancellation -> NOT_FOUND
+        CancelOrderResult notFoundResult = orderService.cancelOrder(9999L);
+        assertEquals(CancelOrderResult.Status.NOT_FOUND, notFoundResult.status());
     }
 }

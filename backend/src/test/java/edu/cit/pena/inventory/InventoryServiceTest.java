@@ -61,4 +61,14 @@ class InventoryServiceTest {
         assertFalse(result.isSuccess());
         assertTrue(result.getReason().contains("Product not found"));
     }
+
+    @Test
+    @DisplayName("Should successfully restock inventory and increase quantity")
+    void testRestockSuccess() {
+        RestockResult result = inventoryService.restock("P100", 10);
+
+        assertTrue(result.isSuccess());
+        assertEquals(35, result.getRemainingStock());
+        assertEquals(35, inventoryService.getItem("P100").getStock());
+    }
 }
