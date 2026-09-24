@@ -8,7 +8,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -114,12 +116,12 @@ class OrderServiceTest {
         // Verify stock restocked back to 10
         assertEquals(10, inventoryService.getItem("P200").getStock());
 
-        // Attempt to cancel again -> must return ALREADY_CANCELLED
-        CancelOrderResult secondCancel = orderService.cancelOrder(orderId);
-        assertEquals(CancelOrderResult.Status.ALREADY_CANCELLED, secondCancel.status());
+        // Attempt to cancel again -> must throw ResponseStatusException CONFLICT (409)
+        ResponseStatusException conflictEx = assertThrows(ResponseStatusException.class, () -> orderService.cancelOrder(orderId));
+        assertEquals(HttpStatus.CONFLICT, conflictEx.getStatusCode());
 
-        // Non-existent order cancellation -> NOT_FOUND
-        CancelOrderResult notFoundResult = orderService.cancelOrder(9999L);
-        assertEquals(CancelOrderResult.Status.NOT_FOUND, notFoundResult.status());
+        // Non-existent order cancellation -> NOT_FOUND (404)
+        ResponseStatusException notFoundEx = assertThrows(ResponseStatusException.class, () -> orderService.cancelOrder(9999L));
+        assertEquals(HttpStatus.NOT_FOUND, notFoundEx.getStatusCode());
     }
 }

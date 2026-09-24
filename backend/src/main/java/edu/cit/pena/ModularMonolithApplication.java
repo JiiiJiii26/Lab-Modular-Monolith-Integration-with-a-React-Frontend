@@ -2,6 +2,7 @@ package edu.cit.pena;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Root application class for the Modular Monolith.
@@ -9,6 +10,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * both the Order module ('edu.cit.pena.shop') and the Inventory module ('edu.cit.pena.inventory').
  */
 @SpringBootApplication
+@EnableScheduling
 public class ModularMonolithApplication {
 
     public static void main(String[] args) {

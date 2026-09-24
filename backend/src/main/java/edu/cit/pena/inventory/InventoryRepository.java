@@ -1,6 +1,9 @@
 package edu.cit.pena.inventory;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -10,4 +13,8 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 interface InventoryRepository extends JpaRepository<InventoryItem, String> {
+
+    @Modifying
+    @Query("UPDATE InventoryItem i SET i.stock = i.stock + :units WHERE i.productId = :productId")
+    int incrementStock(@Param("productId") String productId, @Param("units") int units);
 }

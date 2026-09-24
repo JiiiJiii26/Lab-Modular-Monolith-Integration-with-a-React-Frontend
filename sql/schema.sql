@@ -1,6 +1,7 @@
 -- schema.sql
--- Drop-and-recreate script for Lab 2 Modular Monolith Integration
+-- Drop-and-recreate script for Lab 2 & Lab 3 Modular Monolith Integration
 
+DROP TABLE IF EXISTS supplier_orders CASCADE;
 DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
 DROP TABLE IF EXISTS orders CASCADE;
@@ -35,6 +36,20 @@ CREATE TABLE notifications (
     message TEXT NOT NULL,
     kind TEXT NOT NULL CHECK (kind IN ('ORDER_CONFIRMED', 'ORDER_REJECTED', 'ORDER_CANCELLED', 'LOW_STOCK')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Supplier Orders table (Lab 3 Anti-Corruption Layer)
+CREATE TABLE supplier_orders (
+    id           BIGSERIAL PRIMARY KEY,
+    product_id   TEXT NOT NULL REFERENCES inventory(product_id),
+    buyer_ref    TEXT NOT NULL UNIQUE,
+    request_id   TEXT NOT NULL UNIQUE,
+    po_number    TEXT,
+    cases        INT  NOT NULL,
+    units        INT  NOT NULL,
+    status       TEXT NOT NULL CHECK (status IN ('PENDING', 'SENT', 'ACKNOWLEDGED', 'PICKING', 'SHIPPED', 'DELIVERED', 'FAILED', 'UNKNOWN')),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Seed initial inventory data
