@@ -91,6 +91,11 @@ LegacySupply documents four order status codes: 10 (Accepted), 20 (Picking),
 - On the next successful poll that returns a known code, the row is updated
   normally. The UNKNOWN state is a fallback, not a terminal state.
 
+  During testing we observed an undocumented StatusCode 90 on PO-100211 (BuyerRef
+RO-3). The translator mapped it to UNKNOWN and logged a WARN with the raw code.
+The self-check page confirmed LegacySupply classifies 90 as a cancellation, so
+the UNKNOWN-as-terminal decision was validated in production traffic.
+
 ## 6. Resilience and Tracking
 
 ### Timeouts
