@@ -70,7 +70,7 @@ class TianggeFeedClient {
         return false;
     }
 
-    void confirmCancellation(String orderId) {
+    boolean confirmCancellation(String orderId) {
         String path = "/orders/" + orderId + "/cancellation";
         Map<String, Object> body = new HashMap<>();
         body.put("restocked", true);
@@ -80,9 +80,11 @@ class TianggeFeedClient {
                 log.warn("Tiangge cancel HTTP {} for {} body={}", response.statusCode(), orderId, response.body());
             } else {
                 log.info("Confirmed cancellation to Tiangge for {}", orderId);
+                return true;
             }
         } catch (Exception e) {
             log.warn("Tiangge cancel error for {}: {}", orderId, e.getMessage());
         }
+        return false;
     }
 }

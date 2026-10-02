@@ -43,5 +43,5 @@ public interface TianggeGateway {
      *
      * @param orderId Tiangge order id
      */
-    void confirmCancellation(String orderId);
+    boolean confirmCancellation(String orderId);
 }

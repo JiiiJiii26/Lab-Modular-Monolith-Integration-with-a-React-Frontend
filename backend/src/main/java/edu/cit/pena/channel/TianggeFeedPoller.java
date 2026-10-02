@@ -133,7 +133,9 @@ class TianggeFeedPoller {
                 .map(l -> new OrderItemRequest(l.sellerSku(), l.qty()))
                 .toList();
 
-        OrderResponse response = orderService.placeOrder(new OrderRequest(items));
+        OrderResponse response = TianggeStockSyncListener.suppressForCurrentThread(
+            () -> orderService.placeOrder(new OrderRequest(items))
+        );
         Long shopOrderId = response.orderId();
 
         TianggeDecision decision = "CONFIRMED".equalsIgnoreCase(response.status())
@@ -190,21 +192,34 @@ class TianggeFeedPoller {
         TianggeOrderMap map = orderMapRepo.findById(event.orderId()).orElse(null);
         if (map == null) {
             log.warn("ORDER_CANCELLED for {} but no local mapping - confirming anyway", event.orderId());
-            gateway.confirmCancellation(event.orderId());
+            if (!gateway.confirmCancellation(event.orderId())) {
+                throw new IllegalStateException("Failed to confirm cancellation for " + event.orderId());
+            }
             return;
         }
 
-        try {
-            orderService.cancelOrder(map.getShopOrderId());
-        } catch (Exception e) {
-            log.warn("Cancel failed for shop order {} (Tiangge {}): {}",
-                    map.getShopOrderId(), event.orderId(), e.getMessage());
+        if (!"CANCELLED_BY_CUSTOMER".equals(map.getStatus())) {
+            try {
+                TianggeStockSyncListener.suppressForCurrentThread(
+                        () -> orderService.cancelOrder(map.getShopOrderId())
+                );
+            } catch (Exception e) {
+                log.warn("Cancel failed for shop order {} (Tiangge {}): {}",
+                        map.getShopOrderId(), event.orderId(), e.getMessage());
+                throw e;
+            }
+
+            map.setStatus("CANCELLED_BY_CUSTOMER");
+            orderMapRepo.save(map);
         }
 
-        map.setStatus("CANCELLED_BY_CUSTOMER");
-        orderMapRepo.save(map);
+        if (!gateway.confirmCancellation(event.orderId())) {
+            throw new IllegalStateException("Failed to confirm cancellation for " + event.orderId());
+        }
 
-        gateway.confirmCancellation(event.orderId());
+        if (!gateway.publishCurrentStock()) {
+            throw new IllegalStateException("Failed to publish stock after cancellation " + event.orderId());
+        }
     }
 
     private Instant parseInstant(String iso) {

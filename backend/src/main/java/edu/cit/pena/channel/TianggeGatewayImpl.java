@@ -75,7 +75,7 @@ class TianggeGatewayImpl implements TianggeGateway {
     }
 
     @Override
-    public void confirmCancellation(String orderId) {
-        feedClient.confirmCancellation(orderId);
+    public boolean confirmCancellation(String orderId) {
+        return feedClient.confirmCancellation(orderId);
     }
 }
