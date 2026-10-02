@@ -102,14 +102,12 @@ class TianggeFeedPoller {
             log.debug("Event {} already processed - skipping", event.eventId());
             return;
         }
-
+        processedRepo.save(new TianggeEventProcessed(event.eventId()));
         switch (event.type()) {
             case "ORDER_PLACED" -> handlePlaced(event);
             case "ORDER_CANCELLED" -> handleCancelled(event);
             default -> log.info("Ignoring unsupported event type: {}", event.type());
         }
-
-        processedRepo.save(new TianggeEventProcessed(event.eventId()));
     }
 
     private void handlePlaced(TianggeEvent event) {
