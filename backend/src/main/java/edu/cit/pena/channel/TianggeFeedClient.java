@@ -1,13 +1,13 @@
 package edu.cit.pena.channel;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * PACKAGE-PRIVATE HTTP client for Tiangge feed + decision endpoints.
@@ -50,7 +50,7 @@ class TianggeFeedClient {
         }
     }
 
-    void reportDecision(String orderId, TianggeDecision decision, String shopOrderId, String reason) {
+    boolean reportDecision(String orderId, TianggeDecision decision, String shopOrderId, String reason) {
         String path = "/orders/" + orderId + "/decision";
         Map<String, Object> body = new HashMap<>();
         body.put("decision", decision.name());
@@ -62,10 +62,12 @@ class TianggeFeedClient {
                 log.warn("Tiangge decision HTTP {} for {} body={}", response.statusCode(), orderId, response.body());
             } else {
                 log.info("Reported {} for Tiangge order {} -> shopOrder {}", decision, orderId, shopOrderId);
+                return true;
             }
         } catch (Exception e) {
             log.warn("Tiangge decision error for {}: {}", orderId, e.getMessage());
         }
+        return false;
     }
 
     void confirmCancellation(String orderId) {

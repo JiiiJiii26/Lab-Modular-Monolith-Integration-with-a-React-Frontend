@@ -21,7 +21,7 @@ class TianggeStockPublisher {
         this.httpClient = httpClient;
     }
 
-    void publishStock(Map<String, Integer> stockBySellerSku) {
+    boolean publishStock(Map<String, Integer> stockBySellerSku) {
         try {
             List<TianggeDtos.StockEntry> entries = stockBySellerSku.entrySet().stream()
                     .map(e -> new TianggeDtos.StockEntry(e.getKey(), e.getValue()))
@@ -30,11 +30,13 @@ class TianggeStockPublisher {
             var response = httpClient.put("/stock", body);
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 log.info("Published stock for {} SKUs to Tiangge", entries.size());
+                return true;
             } else {
                 log.warn("Tiangge publishStock failed: HTTP {} body={}", response.statusCode(), response.body());
             }
         } catch (Exception e) {
             log.warn("Tiangge publishStock error: {}", e.getMessage());
         }
+        return false;
     }
 }

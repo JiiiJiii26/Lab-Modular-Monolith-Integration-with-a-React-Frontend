@@ -21,10 +21,11 @@ class TianggeEventDeduper {
         this.repo = repo;
     }
 
-    /**
-     * @return true if this eventId is new and has now been recorded;
-     *         false if it was already processed.
-     */
+    @Transactional(readOnly = true)
+    boolean isProcessed(String eventId) {
+        return repo.existsById(eventId);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     boolean markProcessed(String eventId) {
         if (repo.existsById(eventId)) {

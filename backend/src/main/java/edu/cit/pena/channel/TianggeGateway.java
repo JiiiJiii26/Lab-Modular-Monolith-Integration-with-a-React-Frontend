@@ -13,7 +13,9 @@ public interface TianggeGateway {
 
     void publishListings(List<Listing> listings);
 
-    void publishStock(Map<String, Integer> stockBySellerSku);
+    boolean publishStock(Map<String, Integer> stockBySellerSku);
+
+    boolean publishCurrentStock();
 
     String instanceId();
 
@@ -34,7 +36,7 @@ public interface TianggeGateway {
      * @param shopOrderId my local order id (as String)
      * @param reason      optional up to 200 chars
      */
-    void reportDecision(String orderId, TianggeDecision decision, String shopOrderId, String reason);
+    boolean reportDecision(String orderId, TianggeDecision decision, String shopOrderId, String reason);
 
     /**
      * Confirm that a customer cancellation was handled (stock restocked).

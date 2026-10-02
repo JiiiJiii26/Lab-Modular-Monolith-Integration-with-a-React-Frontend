@@ -96,7 +96,7 @@ class TianggeFeedPoller {
             log.warn("Event without eventId - skipping seq {}", event.seq());
             return;
         }
-        if (!deduper.markProcessed(event.eventId())) {
+        if (deduper.isProcessed(event.eventId())) {
             log.info("Event {} already processed - skipping", event.eventId());
             return;
         }
@@ -105,12 +105,27 @@ class TianggeFeedPoller {
             case "ORDER_CANCELLED" -> handleCancelled(event);
             default -> log.info("Ignoring unsupported event type: {}", event.type());
         }
+        deduper.markProcessed(event.eventId());
     }
 
     private void handlePlaced(TianggeEvent event) {
+        TianggeOrderMap existingMap = orderMapRepo.findById(event.orderId()).orElse(null);
+        if (existingMap != null) {
+            TianggeDecision existingDecision = TianggeDecision.valueOf(existingMap.getStatus());
+            reportDecisionAndPublishStock(event.orderId(), existingDecision, existingMap.getShopOrderId());
+            return;
+        }
+
         if (event.lines() == null || event.lines().isEmpty()) {
             log.warn("ORDER_PLACED {} has no lines - rejecting", event.orderId());
-            gateway.reportDecision(event.orderId(), TianggeDecision.REJECTED, "0", "Empty order lines");
+            if (!gateway.reportDecision(
+                    event.orderId(),
+                    TianggeDecision.REJECTED,
+                    "0",
+                    "Empty order lines"
+            )) {
+                throw new IllegalStateException("Failed to report empty-order rejection");
+            }
             return;
         }
 
@@ -133,13 +148,43 @@ class TianggeFeedPoller {
                 deadline
         ));
 
-        gateway.reportDecision(
+        reportDecisionAndPublishStock(
                 event.orderId(),
                 decision,
-                String.valueOf(shopOrderId),
-                decision == TianggeDecision.REJECTED ? response.reason() : null
+            shopOrderId,
+            decision == TianggeDecision.REJECTED ? response.reason() : null
         );
     }
+
+        private void reportDecisionAndPublishStock(
+            String tianggeOrderId,
+            TianggeDecision decision,
+            long shopOrderId
+        ) {
+        reportDecisionAndPublishStock(tianggeOrderId, decision, shopOrderId, null);
+        }
+
+        private void reportDecisionAndPublishStock(
+            String tianggeOrderId,
+            TianggeDecision decision,
+            long shopOrderId,
+            String reason
+        ) {
+        if (!gateway.reportDecision(
+            tianggeOrderId,
+            decision,
+            String.valueOf(shopOrderId),
+            reason
+        )) {
+            throw new IllegalStateException("Failed to report decision for " + tianggeOrderId);
+        }
+
+        if (decision == TianggeDecision.ACCEPTED && !gateway.publishCurrentStock()) {
+            throw new IllegalStateException(
+                "Decision reported but stock publication failed for " + tianggeOrderId
+            );
+        }
+        }
 
     private void handleCancelled(TianggeEvent event) {
         TianggeOrderMap map = orderMapRepo.findById(event.orderId()).orElse(null);
