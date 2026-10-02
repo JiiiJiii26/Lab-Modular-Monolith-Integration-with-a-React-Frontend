@@ -1,130 +1,130 @@
 package edu.cit.pena.inventory;
 
-import edu.cit.pena.shared.events.LowStockEvent;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import edu.cit.pena.inventory.dto.InventoryItemDto;
+import edu.cit.pena.inventory.dto.ReservationResult;
+import edu.cit.pena.inventory.event.LowStockEvent;
 
 /**
- * ARCHITECTURAL MODULE BOUNDARY ENFORCEMENT:
- *
- * This implementation class is intentionally PACKAGE-PRIVATE (default visibility, no 'public' modifier).
- *
- * In a modular monolith architecture, logical boundaries between modules must be strictly enforced
- * at compile time rather than merely by convention. By declaring InventoryServiceImpl package-private,
- * code outside of the 'edu.cit.pena.inventory' package (such as 'edu.cit.pena.shop' or
- * 'edu.cit.pena.notification') cannot directly instantiate, reference, or cast to this class.
- *
- * External modules are compelled to interact solely with the public 'InventoryService' interface.
+ * Package-private implementation of InventoryService.
+ * Enforces architectural boundary: outside packages (such as shop) can only
+ * access the public InventoryService interface.
  */
 @Service
 @Transactional
 class InventoryServiceImpl implements InventoryService {
 
+    private static final int DEFAULT_LOW_STOCK_THRESHOLD = 5;
+
     private final InventoryRepository inventoryRepository;
     private final ApplicationEventPublisher eventPublisher;
-    private final int lowStockThreshold;
 
-    public InventoryServiceImpl(
-            InventoryRepository inventoryRepository,
-            ApplicationEventPublisher eventPublisher,
-            @Value("${app.inventory.low-stock-threshold:5}") int lowStockThreshold) {
+    @Value("${inventory.low-stock-threshold:5}")
+    private int lowStockThreshold = DEFAULT_LOW_STOCK_THRESHOLD;
+
+    InventoryServiceImpl(InventoryRepository inventoryRepository, ApplicationEventPublisher eventPublisher) {
         this.inventoryRepository = inventoryRepository;
         this.eventPublisher = eventPublisher;
-        this.lowStockThreshold = lowStockThreshold;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public InventoryItem getItem(String productId) {
-        return inventoryRepository.findById(productId).orElse(null);
+    public InventoryItemDto getItem(String productId) {
+        return inventoryRepository.findById(productId)
+                .map(this::toDto)
+                .orElse(null);
     }
 
     @Override
     public ReservationResult reserve(String productId, int quantity) {
         if (quantity <= 0) {
-            return ReservationResult.failure(
-                    "Invalid reservation quantity: " + quantity + ". Quantity must be positive.",
-                    0,
-                    null
-            );
+            return ReservationResult.builder()
+                    .success(false)
+                    .message("Quantity must be greater than zero.")
+                    .remainingStock(getItemStockOrZero(productId))
+                    .build();
         }
 
-        InventoryItem item = inventoryRepository.findById(productId).orElse(null);
-        if (item == null) {
-            return ReservationResult.failure(
-                    "Product not found: " + productId,
-                    0,
-                    null
-            );
+        Optional<InventoryItem> optionalItem = inventoryRepository.findByIdForUpdate(productId);
+        if (optionalItem.isEmpty()) {
+            return ReservationResult.builder()
+                    .success(false)
+                    .message(String.format("Product with ID '%s' not found.", productId))
+                    .remainingStock(0)
+                    .build();
         }
 
+        InventoryItem item = optionalItem.get();
         if (item.getStock() < quantity) {
-            return ReservationResult.failure(
-                    "Insufficient stock for " + item.getName() + " (requested: " + quantity + ", available: " + item.getStock() + ").",
-                    item.getStock(),
-                    item
-            );
+            return ReservationResult.builder()
+                    .success(false)
+                    .message(String.format("Insufficient stock for %s (%s): requested %d, available %d",
+                            item.getName(), productId, quantity, item.getStock()))
+                    .remainingStock(item.getStock())
+                    .build();
         }
 
-        // Decrement stock and persist update
-        int updatedStock = item.getStock() - quantity;
-        item.setStock(updatedStock);
+        // Deduct stock and persist
+        int newStock = item.getStock() - quantity;
+        item.setStock(newStock);
         inventoryRepository.save(item);
 
-        // LowStock rule: emit LowStockEvent at most once per reserve() call if remaining stock < threshold
-        if (updatedStock < lowStockThreshold) {
+        // Check low-stock threshold rule and publish event
+        if (newStock <= lowStockThreshold) {
             eventPublisher.publishEvent(new LowStockEvent(
                     item.getProductId(),
                     item.getName(),
-                    updatedStock,
-                    lowStockThreshold
+                    newStock,
+                    lowStockThreshold,
+                    LocalDateTime.now()
             ));
         }
 
-        return ReservationResult.success(
-                "Successfully reserved " + quantity + " unit(s) of " + item.getName() + ".",
-                updatedStock,
-                item
-        );
+        return ReservationResult.builder()
+                .success(true)
+                .message(String.format("Successfully reserved %d unit(s) of %s (%s).",
+                        quantity, item.getName(), productId))
+                .remainingStock(item.getStock())
+                .build();
     }
 
     @Override
-    public RestockResult restock(String productId, int quantity) {
+    public void restock(String productId, int quantity) {
         if (quantity <= 0) {
-            return RestockResult.failure(
-                    "Invalid restock quantity: " + quantity + ". Quantity must be positive.",
-                    0,
-                    null
-            );
+            return;
         }
 
-        InventoryItem item = inventoryRepository.findById(productId).orElse(null);
-        if (item == null) {
-            return RestockResult.failure(
-                    "Product not found: " + productId,
-                    0,
-                    null
-            );
-        }
-
-        int updatedStock = item.getStock() + quantity;
-        item.setStock(updatedStock);
-        inventoryRepository.save(item);
-
-        return RestockResult.success(
-                "Successfully restocked " + quantity + " unit(s) of " + item.getName() + ".",
-                updatedStock,
-                item
-        );
+        inventoryRepository.findById(productId).ifPresent(item -> {
+            item.setStock(item.getStock() + quantity);
+            inventoryRepository.save(item);
+        });
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<InventoryItem> getAllItems() {
-        return inventoryRepository.findAll();
+    public List<InventoryItemDto> getAllItems() {
+        return inventoryRepository.findAll().stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    private InventoryItemDto toDto(InventoryItem item) {
+        return new InventoryItemDto(item.getProductId(), item.getName(), item.getStock());
+    }
+
+    private int getItemStockOrZero(String productId) {
+        return inventoryRepository.findById(productId)
+                .map(InventoryItem::getStock)
+                .orElse(0);
     }
 }
+

@@ -1,20 +1,17 @@
 package edu.cit.pena.inventory;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-/**
- * Package-private repository interface for inventory data access.
- * Keeping this interface package-private strictly prevents other modules (such as shop)
- * from bypassing the InventoryService boundary and querying or mutating stock directly.
- */
-@Repository
-interface InventoryRepository extends JpaRepository<InventoryItem, String> {
+import jakarta.persistence.LockModeType;
 
-    @Modifying
-    @Query("UPDATE InventoryItem i SET i.stock = i.stock + :units WHERE i.productId = :productId")
-    int incrementStock(@Param("productId") String productId, @Param("units") int units);
+@Repository
+public interface InventoryRepository extends JpaRepository<InventoryItem, String> {
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select item from InventoryItem item where item.productId = :productId")
+	java.util.Optional<InventoryItem> findByIdForUpdate(@Param("productId") String productId);
 }

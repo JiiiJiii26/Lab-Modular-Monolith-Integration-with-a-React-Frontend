@@ -1,81 +1,76 @@
 package edu.cit.pena.channel;
 
-import java.util.function.Supplier;
-
+import edu.cit.pena.inventory.InventoryService;
+import edu.cit.pena.inventory.dto.InventoryItemDto;
+import edu.cit.pena.shop.event.OrderCancelledEvent;
+import edu.cit.pena.shop.event.OrderPlacedEvent;
+import edu.cit.pena.supplier.event.SupplierOrderDeliveredEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import edu.cit.pena.shared.events.OrderCancelledEvent;
-import edu.cit.pena.shared.events.OrderPlacedEvent;
-import edu.cit.pena.shared.events.SupplierOrderDeliveredEvent;
+import java.util.List;
 
 /**
- * PACKAGE-PRIVATE listener. Pushes fresh stock after cancellations and supplier
- * deliveries. Tiangge orders publish stock after their remote decision succeeds.
+ * Event-driven listener that synchronizes inventory stock levels with Tiangge.
+ * Listens to domain events (order placed, order cancelled, supplier delivery)
+ * and reacts immediately by sending PUT /stock.
+ * Never publishes on a timer.
  */
 @Component
-@Order(Ordered.LOWEST_PRECEDENCE)
 class TianggeStockSyncListener {
 
     private static final Logger log = LoggerFactory.getLogger(TianggeStockSyncListener.class);
-    private static final ThreadLocal<Boolean> suppressForCurrentThread =
-            ThreadLocal.withInitial(() -> false);
 
-    private final TianggeGateway gateway;
+    private final InventoryService inventoryService;
+    private final TianggeClient httpClient;
 
-    TianggeStockSyncListener(TianggeGateway gateway) {
-        this.gateway = gateway;
+    public TianggeStockSyncListener(InventoryService inventoryService, TianggeClient httpClient) {
+        this.inventoryService = inventoryService;
+        this.httpClient = httpClient;
     }
 
-    static <T> T suppressForCurrentThread(Supplier<T> action) {
-        boolean previous = suppressForCurrentThread.get();
-        suppressForCurrentThread.set(true);
+    public synchronized void publishCurrentStock() {
         try {
-            return action.get();
-        } finally {
-            suppressForCurrentThread.set(previous);
-        }
-    }
+            List<InventoryItemDto> items = inventoryService.getAllItems();
+            List<Models.StockItem> stockPayload = items.stream()
+                    .map(item -> new Models.StockItem(item.getProductId(), item.getStock()))
+                    .toList();
 
-    static void suppressForCurrentThread(Runnable action) {
-        suppressForCurrentThread(() -> {
-            action.run();
-            return null;
-        });
-    }
-
-    @EventListener
-    void onOrderPlaced(OrderPlacedEvent event) {
-        if (!suppressForCurrentThread.get()) {
-            publish();
+            log.info("Synchronizing stock with Tiangge: {}", stockPayload);
+            httpClient.publishStock(stockPayload);
+            log.info("Stock successfully synchronized with Tiangge.");
+        } catch (Exception ex) {
+            log.warn("Failed synchronizing stock with Tiangge: {}", ex.getMessage());
         }
     }
 
     @EventListener
-    void onOrderCancelled(OrderCancelledEvent event) {
-        if (!suppressForCurrentThread.get()) {
-            publish();
+    public void onOrderPlaced(OrderPlacedEvent event) {
+        if (Boolean.TRUE.equals(TianggeOrderProcessor.CHANNEL_PROCESSING.get())) {
+            log.info("[Event] OrderPlacedEvent {} suppressed during channel order processing (will publish stock after decision).", event.getOrderId());
+            return;
         }
+        log.info("[Event] OrderPlacedEvent {} received: updating Tiangge stock numbers.", event.getOrderId());
+        publishCurrentStock();
     }
 
     @EventListener
-    void onDelivery(SupplierOrderDeliveredEvent event) {
-        publish();
+    public void onOrderCancelled(OrderCancelledEvent event) {
+        if (Boolean.TRUE.equals(TianggeOrderProcessor.CHANNEL_PROCESSING.get())) {
+            log.info("[Event] OrderCancelledEvent {} suppressed during channel cancellation processing (will publish stock after confirmation).", event.getOrderId());
+            return;
+        }
+        log.info("[Event] OrderCancelledEvent {} received: updating Tiangge stock numbers.", event.getOrderId());
+        publishCurrentStock();
     }
 
-    private void publish() {
-        try {
-            if (gateway.publishCurrentStock()) {
-                log.info("Stock published to Tiangge after inventory change");
-            } else {
-                log.warn("Stock publication to Tiangge failed after inventory change");
-            }
-        } catch (Exception e) {
-            log.warn("Failed to publish stock after inventory change: {}", e.getMessage());
-        }
+    @EventListener
+    @Order(3)
+    public void onSupplierDelivery(SupplierOrderDeliveredEvent event) {
+        log.info("[Event] SupplierOrderDeliveredEvent {} received: updating Tiangge stock numbers.", event.getPoNumber());
+        publishCurrentStock();
     }
 }

@@ -8,12 +8,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/**
- * REST controller exposing notification feed endpoint.
- */
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "${app.cors.allowed-origins:http://localhost:5173}")
+@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class NotificationController {
 
     private final NotificationRepository notificationRepository;
@@ -23,9 +20,8 @@ public class NotificationController {
     }
 
     /**
-     * Endpoint returning all notifications, newest first.
-     *
-     * @return List of notifications sorted descending by creation time.
+     * GET /api/notifications
+     * Returns list of recorded domain event notifications for live activity feed.
      */
     @GetMapping("/notifications")
     public ResponseEntity<List<Notification>> getNotifications() {

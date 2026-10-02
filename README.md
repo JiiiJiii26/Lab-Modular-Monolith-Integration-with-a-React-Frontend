@@ -144,7 +144,7 @@ server: {
   port: 5173,
   proxy: {
     '/api': {
-      target: 'http://localhost:8080',
+      target: 'http://localhost:8081',
       changeOrigin: true,
       secure: false
     }
@@ -153,7 +153,7 @@ server: {
 ```
 
 ### Why Choose a Vite Proxy?
-1. **Zero Hardcoded Hostnames**: Frontend code issues relative HTTP requests (e.g. `fetch('/api/orders')` and `fetch('/api/inventory')`). It does not need to know or hardcode `http://localhost:8080`.
+1. **Zero Hardcoded Hostnames**: Frontend code issues relative HTTP requests (e.g. `fetch('/api/orders')` and `fetch('/api/inventory')`). It does not need to know or hardcode `http://localhost:8081`.
 2. **Eliminates Browser Pre-flight Latency**: Because the browser communicates directly with the Vite origin (`http://localhost:5173`), calls to `/api/...` are treated as same-origin requests by the browser. This eliminates OPTIONS pre-flight checks during development.
 3. **Production Parity**: In a production deployment, a web client and backend API are usually hosted behind an ingress controller, reverse proxy (Nginx, Caddy), or API Gateway on the same domain. Using relative paths via a dev proxy mirrors the production architecture perfectly.
 4. **CORS Flexibility**: The backend also includes an explicit Spring `@CrossOrigin` and `WebMvcConfigurer` allowing `http://localhost:5173`, ensuring that if a developer ever switches to full absolute URLs, requests continue to succeed without CORS blocks.
@@ -166,7 +166,7 @@ You can verify the backend endpoints directly using `curl` or PowerShell `Invoke
 
 ### 1. View Initial Inventory (`GET /api/inventory`)
 ```bash
-curl -X GET http://localhost:8080/api/inventory
+curl -X GET http://localhost:8081/api/inventory
 ```
 **Console Response:**
 ```json
@@ -192,7 +192,7 @@ curl -X GET http://localhost:8080/api/inventory
 ### 2. Confirmed Order Path (`POST /api/orders`)
 Submit an order for 1 unit of `P100` (Wireless Mouse has 25 initial stock):
 ```bash
-curl -X POST http://localhost:8080/api/orders \
+curl -X POST http://localhost:8081/api/orders \
   -H "Content-Type: application/json" \
   -d "{\"productId\": \"P100\", \"quantity\": 1}"
 ```
@@ -212,7 +212,7 @@ curl -X POST http://localhost:8080/api/orders \
 ### 3. Rejected Order Path (`POST /api/orders`)
 Submit an order for 1 unit of `P300` (USB-C Hub has 0 stock):
 ```bash
-curl -X POST http://localhost:8080/api/orders \
+curl -X POST http://localhost:8081/api/orders \
   -H "Content-Type: application/json" \
   -d "{\"productId\": \"P300\", \"quantity\": 1}"
 ```

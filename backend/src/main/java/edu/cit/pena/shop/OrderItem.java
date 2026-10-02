@@ -1,25 +1,22 @@
 package edu.cit.pena.shop;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 
-/**
- * JPA entity representing an individual item line in an order.
- * Mapped to the 'order_items' table.
- */
 @Entity
 @Table(name = "order_items")
 public class OrderItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "order_item_id")
-    private Long orderItemId;
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
+    @JsonBackReference
     private Order order;
 
-    @Column(name = "product_id", nullable = false)
+    @Column(name = "product_id", length = 50, nullable = false)
     private String productId;
 
     @Column(name = "quantity", nullable = false)
@@ -34,12 +31,21 @@ public class OrderItem {
         this.quantity = quantity;
     }
 
-    public Long getOrderItemId() {
-        return orderItemId;
+    public OrderItem(String productId, int quantity) {
+        this.productId = productId;
+        this.quantity = quantity;
     }
 
-    public void setOrderItemId(Long orderItemId) {
-        this.orderItemId = orderItemId;
+    public Long getId() {
+        return id;
+    }
+
+    public Long getOrderItemId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public Order getOrder() {

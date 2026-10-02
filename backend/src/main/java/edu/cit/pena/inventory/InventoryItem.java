@@ -5,15 +5,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/**
- * JPA entity representing an item in the inventory table.
- */
 @Entity
 @Table(name = "inventory")
 public class InventoryItem {
 
     @Id
-    @Column(name = "product_id", nullable = false)
+    @Column(name = "product_id", length = 50, nullable = false)
     private String productId;
 
     @Column(name = "name", nullable = false)
@@ -53,14 +50,5 @@ public class InventoryItem {
 
     public void setStock(int stock) {
         this.stock = stock;
-    }
-
-    @Override
-    public String toString() {
-        return "InventoryItem{" +
-                "productId='" + productId + '\'' +
-                ", name='" + name + '\'' +
-                ", stock=" + stock +
-                '}';
     }
 }

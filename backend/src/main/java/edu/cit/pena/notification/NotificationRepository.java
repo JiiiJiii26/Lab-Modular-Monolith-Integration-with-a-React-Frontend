@@ -5,12 +5,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-/**
- * Package-private repository interface for notifications.
- * Encapsulated strictly within the edu.cit.pena.notification package.
- */
 @Repository
-interface NotificationRepository extends JpaRepository<Notification, Long> {
-
+public interface NotificationRepository extends JpaRepository<Notification, String> {
     List<Notification> findAllByOrderByCreatedAtDesc();
 }
