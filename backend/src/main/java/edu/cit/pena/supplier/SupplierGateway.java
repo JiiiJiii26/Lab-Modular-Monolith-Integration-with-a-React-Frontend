@@ -35,4 +35,12 @@ public interface SupplierGateway {
      * (status = PENDING, SENT, or ACKNOWLEDGED).
      */
     List<SupplierOrderResult> findOpenOrders();
+
+    /**
+     * Look up supplier mapping for an internal product ID.
+     *
+     * @param productId internal product ID (e.g. "P100")
+     * @return mapping if found, or null
+     */
+    SupplierProductMapping mappingFor(String productId);
 }

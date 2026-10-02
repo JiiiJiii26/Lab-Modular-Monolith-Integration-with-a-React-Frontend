@@ -58,3 +58,35 @@ VALUES
     ('P100', 'Wireless Mouse', 25),
     ('P200', 'Mechanical Keyboard', 10),
     ('P300', 'USB-C Hub', 0);
+
+
+    -- ============================================================
+-- Lab 4: Tiangge channel tables
+-- ============================================================
+drop table if exists tiangge_events_processed cascade;
+drop table if exists tiangge_order_map cascade;
+drop table if exists tiangge_feed_cursor cascade;
+
+create table tiangge_feed_cursor (
+  id           int primary key default 1,
+  last_cursor  bigint not null default 0,
+  updated_at   timestamptz not null default now(),
+  constraint single_row check (id = 1)
+);
+
+insert into tiangge_feed_cursor (id, last_cursor) values (1, 0)
+  on conflict (id) do nothing;
+
+create table tiangge_order_map (
+  tiangge_order_id   text primary key,
+  shop_order_id      bigint not null,
+  status             text not null,
+  decision_deadline  timestamptz,
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+
+create table tiangge_events_processed (
+  event_id     text primary key,
+  processed_at timestamptz not null default now()
+);

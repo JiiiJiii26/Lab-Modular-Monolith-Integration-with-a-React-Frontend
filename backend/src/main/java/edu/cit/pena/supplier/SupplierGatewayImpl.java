@@ -201,6 +201,12 @@ class SupplierGatewayImpl implements SupplierGateway {
                 .toList();
     }
 
+    @Override
+    public SupplierProductMapping mappingFor(String productId) {
+        return SupplierTranslator.findMapping(productId).orElse(null);
+    }
+
+
     /**
      * Calls GET /purchase-orders?buyerRef={buyerRef} and parses the PurchaseOrderList.
      * Returns the first matching item's PoNumber + translated status, or empty if none found.

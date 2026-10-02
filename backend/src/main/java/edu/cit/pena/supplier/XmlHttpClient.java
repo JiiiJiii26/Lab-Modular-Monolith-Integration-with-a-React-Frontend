@@ -2,6 +2,7 @@ package edu.cit.pena.supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.function.Supplier;
 
 /**
  * PACKAGE-PRIVATE HTTP client wrapper.
@@ -32,6 +34,7 @@ class XmlHttpClient {
     private final int maxAttempts;
     private final long[] backoffMs;
     private final SessionManager sessionManager;
+    private final Supplier<String> instanceIdSupplier;
     private final HttpClient httpClient;
 
     XmlHttpClient(
@@ -39,13 +42,15 @@ class XmlHttpClient {
             @Value("${supplier.timeout-ms:3000}") int timeoutMs,
             @Value("${supplier.retry.max-attempts:3}") int maxAttempts,
             @Value("${supplier.retry.backoff-ms:200,500,1200}") String backoffConfig,
-            SessionManager sessionManager
+            SessionManager sessionManager,
+            @Autowired(required = false) Supplier<String> instanceIdSupplier
     ) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.timeout = Duration.ofMillis(timeoutMs);
         this.maxAttempts = Math.max(1, maxAttempts);
         this.backoffMs = parseBackoffConfig(backoffConfig);
         this.sessionManager = sessionManager;
+        this.instanceIdSupplier = instanceIdSupplier;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(this.timeout)
                 .build();
@@ -212,17 +217,26 @@ class XmlHttpClient {
             builder.header("X-Request-Id", requestId);
         }
 
+        if (instanceIdSupplier != null && instanceIdSupplier.get() != null && !instanceIdSupplier.get().isBlank()) {
+            builder.header("X-Client-Instance", instanceIdSupplier.get());
+        }
+
         return builder.build();
     }
 
     private HttpRequest buildGetRequest(String path, String token) {
         String normalizedPath = path.startsWith("/") ? path : "/" + path;
-        return HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + normalizedPath))
                 .timeout(timeout)
                 .header("Accept", "application/xml")
                 .header("X-LS-Session", token)
-                .GET()
-                .build();
+                .GET();
+
+        if (instanceIdSupplier != null && instanceIdSupplier.get() != null && !instanceIdSupplier.get().isBlank()) {
+            builder.header("X-Client-Instance", instanceIdSupplier.get());
+        }
+
+        return builder.build();
     }
 }
