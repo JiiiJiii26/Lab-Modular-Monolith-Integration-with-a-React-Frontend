@@ -1,50 +1,19 @@
-# Reflection
+# Lab 4 — Marketplace Reflection
 
 ## Question 1
-**PO-100211 (BuyerRef "RO-3") ended with StatusCode 90, which is not in the documentation. How did you work out what it means, and what does your system now do with the stock that will never arrive?**
+**Tiangge order TG-25BR46 (6 × P200) was accepted at 16:43:30. At that moment your last published stock for P200 was 4, and the stock Tiangge worked out from your own decisions, cancellations and deliveries was 4. Where did your application's stock figure come from, and why did it disagree?**
 
 **Answer:**
-The interface manual documents four order status codes — 10 (Accepted), 20 (Picking),
-30 (Shipped), and 40 (Delivered) — so when our tracking job received StatusCode 90 on
-PO-100211, the `SupplierTranslator.mapStatus` switch fell through to
-`SupplierOrderStatus.UNKNOWN`, logged a WARN with the raw code and PO number, and
-updated the row without emitting a delivery event. Because UNKNOWN is not in the
-"open orders" set used by `SupplierTrackingJob`, the row stopped being polled and the
-order was treated as terminal. That means no units were ever added to Inventory for
-RO-3, which is the correct behaviour: LegacySupply will not physically ship the 2 cases
-of P200, so there is no stock to add. The self-check page later confirmed the
-interpretation — it now shows "1 cancelled orders seen" — which tells us that 90 is
-LegacySupply's undocumented "cancelled/abandoned" code, and validates the terminal-
-UNKNOWN decision we documented in INTEGRATION.md section 5.
+My application's stock figure came from `InventoryService.getAllItems()`, which reads the `inventory` table directly. Tiangge's figure of 4 came from replaying every decision, cancellation, and delivery I had ever reported to it. The two disagreed because the first version of `TianggeStockSyncListener` published stock from inside `OrderPlacedEvent`, which fires inside `OrderService.placeOrder()` — *before* the decision had been reported to Tiangge. So the sequence was: I reserved stock locally, published the reduced number (4), and only afterwards told Tiangge "ACCEPTED" for an order it had already counted as pending. Tiangge's own arithmetic was independently correct; the two views drifted because my publish happened at the wrong point in the transaction. The fix was to remove `OrderPlacedEvent` from the listener entirely and have `TianggeFeedPoller.handlePlaced()` call `gateway.publishCurrentStock()` only *after* `reportDecision()` returned success. Since that change, Tiangge's reconciled figure and my local figure have stayed aligned.
 
 ## Question 2
-**LegacySupply never tells you how long a session lasts. Measure your session lifetime from your own logs, state the number, and explain how your adapter decides when to sign in again.**
+**Order TG-7WNEMK was processed twice: your application sent shop order IDs SO-13 and SO-14. Which delivery of the event led to the second one, and what does your application now do to recognise an event it has already handled?**
 
 **Answer:**
-The auth response from LegacySupply contains only `<SessionToken>` and `<IssuedAt>` — no
-expiry field and no `Set-Cookie` header. The manual only says sessions are "short-lived"
-and that partners should obtain a new session when theirs is no longer accepted. I
-measured the lifetime from my own backend logs: the self-check record shows 3 requests
-that were rejected with HTTP 401 `E-AUTH-07 token expired` out of 13 sign-ins, and the
-gap between a fresh `auth ok` entry and the next `token expired` was consistently
-between 60 and 90 seconds. My adapter never tries to predict this expiry. It assumes
-the token is valid, sends it in the `X-LS-Session` header, and only re-authenticates
-when LegacySupply replies 401. When that happens, `SessionManager` signs in once, caches
-the new token, and retries the original request with the same `X-Request-Id`, so the
-retry cannot create a duplicate. The self-check page confirms this works end-to-end:
-"Renews expired sessions — 13 sign-ins, 3 requests with an expired session."
+The second delivery came from the feed poller retry: when a batch failed mid-way (typically an HTTP 503 on `reportDecision`), the cursor stayed at its last safe position and the same events were re-fetched on the next tick. In the old code, `deduper.markProcessed()` ran *before* the switch in `processEvent`, inside its own transaction — but the poller's overall transaction could still roll back on a later failure, discarding the dedup row along with the work. The next tick re-fetched the event and placed a *second* local order. The fix has two parts. First, `TianggeEventDeduper` is now a separate Spring bean whose `markProcessed()` uses `REQUIRES_NEW`, so the row commits independently of the caller's transaction. Second, `deduper.markProcessed()` now runs *after* the switch — so a batch that fails partway leaves the failing event unmarked and retryable, while events that already succeeded stay marked. Third, `handlePlaced()` now checks `orderMapRepo.findById(event.orderId())` first and reuses the existing `shopOrderId` on a retry, so even if an event does slip through twice it cannot place a duplicate local order. Together these mean `SO-13` and `SO-14` for the same Tiangge order are no longer possible.
 
 ## Question 3
-**The catalog reports PackSize and orders report Uom "CS". Using one of your own orders, show the arithmetic from "units your Inventory needed" to the Qty you sent, and to the units your Inventory received on delivery.**
+**Event evt_5f23e190df3f4d92 (order TG-3JVMKT) reached your application twice, as seq 18 and seq 22, and you processed it once. Show the code and the stored data that made the second delivery harmless, and explain what would happen if your application restarted between the two.**
 
 **Answer:**
-When P100 (Wireless Mouse) dropped below the low-stock threshold of 5, the low-stock rule
-calculated that 16 units were needed to restore stock. P100 maps to SupplierSku
-`GSF-1861` with `PackSize = 20`, so `SupplierTranslator` computed
-`cases = ceil(16 / 20) = 1` and sent `<Qty>1</Qty>` with the Uom that LegacySupply uses
-for the item (`CS`, a case). My `supplier_orders` row records both numbers: `units = 16`
-(what I asked for, in my units) and `cases = 1` (what I sent, in LegacySupply's units).
-LegacySupply created PO-100210 and later moved it to StatusCode 40 (Delivered). One case
-× 20 units per case = 20 physical units shipped — 4 more than the 16 I requested, because
-partial cases are not possible. That 20-unit figure is what the delivery event carries
-into the inventory restock.
+The first delivery of `evt_5f23e190df3f4d92` reached `TianggeFeedPoller.processEvent()`, which called `deduper.markProcessed(eventId)`. That method runs in its own `REQUIRES_NEW` transaction and inserts a row into `tiangge_events_processed` with the `event_id` as the primary key. The rest of the switch ran, `handlePlaced()` placed the order and reported the decision, and the feed cursor advanced. When the same event arrived again as seq 22, `markProcessed()` found the row already present and returned `false`, so `processEvent()` logged `"Event ... already processed - skipping"` and returned immediately. No second order, no second HTTP call, no cursor impact. The persistence is what makes this survive a restart: `tiangge_events_processed` is a table in Supabase, not an in-memory set, so if my app had crashed between seq 18 and seq 22 the dedup row would still be on disk. On startup the poller reads its cursor from `tiangge_feed_cursor` and calls `fetchFeed()` from that position; any event older than the cursor that Tiangge re-delivers is rejected by the `existsById()` check before any work happens. The only scenario that could produce a duplicate after restart is if the crash occurred *after* the decision was reported but *before* the dedup row committed — and that is exactly what the `orderMapRepo.findById()` retry check in `handlePlaced()` guards against, so the local `shopOrderId` is reused rather than a new one created.
