@@ -7,9 +7,6 @@ import java.util.Map;
 
 /**
  * PACKAGE-PRIVATE implementation of TianggeGateway.
- * Delegates to TianggeInstanceManager, TianggeListingService, TianggeStockPublisher.
- * goLive() is a no-op here because TianggeInstanceManager implements ApplicationRunner
- * and handles startup automatically.
  */
 @Service
 class TianggeGatewayImpl implements TianggeGateway {
@@ -17,24 +14,23 @@ class TianggeGatewayImpl implements TianggeGateway {
     private final TianggeInstanceManager instanceManager;
     private final TianggeListingService listingService;
     private final TianggeStockPublisher stockPublisher;
+    private final TianggeFeedClient feedClient;
 
     TianggeGatewayImpl(
             TianggeInstanceManager instanceManager,
             TianggeListingService listingService,
-            TianggeStockPublisher stockPublisher
+            TianggeStockPublisher stockPublisher,
+            TianggeFeedClient feedClient
     ) {
         this.instanceManager = instanceManager;
         this.listingService = listingService;
         this.stockPublisher = stockPublisher;
+        this.feedClient = feedClient;
     }
 
-    /**
-     * Called at startup. TianggeInstanceManager.run() already handles initialization
-     * via ApplicationRunner; this method is provided for explicit programmatic calls.
-     */
     @Override
     public void goLive() {
-        // No-op: ApplicationRunner.run() already handled startup registration and publishing.
+        // No-op: ApplicationRunner in TianggeInstanceManager handles startup.
     }
 
     @Override
@@ -50,5 +46,20 @@ class TianggeGatewayImpl implements TianggeGateway {
     @Override
     public String instanceId() {
         return instanceManager.getInstanceId();
+    }
+
+    @Override
+    public TianggeFeedPage fetchFeed(long after, int limit) {
+        return feedClient.fetchFeed(after, limit);
+    }
+
+    @Override
+    public void reportDecision(String orderId, TianggeDecision decision, String shopOrderId, String reason) {
+        feedClient.reportDecision(orderId, decision, shopOrderId, reason);
+    }
+
+    @Override
+    public void confirmCancellation(String orderId) {
+        feedClient.confirmCancellation(orderId);
     }
 }

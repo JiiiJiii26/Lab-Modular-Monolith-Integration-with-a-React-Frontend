@@ -1,17 +1,18 @@
 package edu.cit.pena.channel;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * PACKAGE-PRIVATE HTTP client for Tiangge API.
@@ -96,6 +97,15 @@ class TianggeHttpClient {
                 .header("X-Client-Instance", instanceIdHeader())
                 .GET()
                 .build();
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    <T> T parseJson(String json, Class<T> type) {
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (Exception e) {
+            log.warn("Failed to parse Tiangge JSON into {}: {}", type.getSimpleName(), e.getMessage());
+            return null;
+        }
     }
 }
