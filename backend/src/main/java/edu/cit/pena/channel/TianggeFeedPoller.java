@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import edu.cit.pena.shop.OrderItemRequest;
 import edu.cit.pena.shop.OrderRequest;
@@ -21,7 +20,7 @@ import edu.cit.pena.shop.OrderService;
  *  - ORDER_PLACED    -> placeOrder() in Order module, then report ACCEPTED/REJECTED
  *  - ORDER_CANCELLED -> cancelOrder(), then confirmCancellation() to Tiangge
  * The cursor is persisted in tiangge_feed_cursor. Events are deduped by eventId
- * in tiangge_events_processed, so replayed events never double-process.
+ * via TianggeEventDeduper, so replayed events never double-process.
  */
 @Component
 class TianggeFeedPoller {
@@ -30,7 +29,7 @@ class TianggeFeedPoller {
 
     private final TianggeGateway gateway;
     private final TianggeFeedCursorRepository cursorRepo;
-    private final TianggeEventProcessedRepository processedRepo;
+    private final TianggeEventDeduper deduper;
     private final TianggeOrderMapRepository orderMapRepo;
     private final OrderService orderService;
 
@@ -40,19 +39,18 @@ class TianggeFeedPoller {
     TianggeFeedPoller(
             TianggeGateway gateway,
             TianggeFeedCursorRepository cursorRepo,
-            TianggeEventProcessedRepository processedRepo,
+            TianggeEventDeduper deduper,
             TianggeOrderMapRepository orderMapRepo,
             OrderService orderService
     ) {
         this.gateway = gateway;
         this.cursorRepo = cursorRepo;
-        this.processedRepo = processedRepo;
+        this.deduper = deduper;
         this.orderMapRepo = orderMapRepo;
         this.orderService = orderService;
     }
 
     @Scheduled(fixedDelayString = "${channel.tiangge.feed-poll-seconds:5}000")
-    @Transactional
     void tick() {
         try {
             TianggeFeedCursor cursor = cursorRepo.findById(1).orElse(null);
@@ -98,11 +96,10 @@ class TianggeFeedPoller {
             log.warn("Event without eventId - skipping seq {}", event.seq());
             return;
         }
-        if (processedRepo.existsById(event.eventId())) {
-            log.debug("Event {} already processed - skipping", event.eventId());
+        if (!deduper.markProcessed(event.eventId())) {
+            log.info("Event {} already processed - skipping", event.eventId());
             return;
         }
-        processedRepo.save(new TianggeEventProcessed(event.eventId()));
         switch (event.type()) {
             case "ORDER_PLACED" -> handlePlaced(event);
             case "ORDER_CANCELLED" -> handleCancelled(event);
