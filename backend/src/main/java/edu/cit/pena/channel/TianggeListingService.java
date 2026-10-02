@@ -25,7 +25,7 @@ class TianggeListingService {
             var items = listings.stream()
                     .map(l -> new TianggeDtos.ListingItem(l.sellerSku(), l.title(), l.supplierSku()))
                     .toList();
-            var body = new TianggeDtos.PublishListingsRequest(items);
+            var body = items;
             var response = httpClient.put("/listings", body);
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 log.info("Published {} listings to Tiangge", listings.size());

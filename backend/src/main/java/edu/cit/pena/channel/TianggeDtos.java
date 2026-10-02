@@ -1,10 +1,9 @@
 package edu.cit.pena.channel;
 
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * PACKAGE-PRIVATE JSON DTOs used internally by TianggeHttpClient.
@@ -34,9 +33,9 @@ class TianggeDtos {
 
     // ── Stock ─────────────────────────────────────────────────────────────────
 
-    record StockEntry(
+      record StockEntry(
             @JsonProperty("sellerSku") String sellerSku,
-            @JsonProperty("qty") int qty
+            @JsonProperty("available") int available
     ) {}
 
     record PublishStockRequest(
