@@ -1,20 +1,21 @@
 package edu.cit.pena.shop;
 
-import edu.cit.pena.inventory.InventoryItem;
-import edu.cit.pena.inventory.InventoryService;
-import edu.cit.pena.inventory.ReservationResult;
-import edu.cit.pena.shared.events.OrderItemDto;
-import edu.cit.pena.shared.events.OrderCancelledEvent;
-import edu.cit.pena.shared.events.OrderPlacedEvent;
-import edu.cit.pena.shared.events.OrderRejectedEvent;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
-import java.util.List;
+import edu.cit.pena.inventory.InventoryItem;
+import edu.cit.pena.inventory.InventoryService;
+import edu.cit.pena.inventory.ReservationResult;
+import edu.cit.pena.shared.events.OrderCancelledEvent;
+import edu.cit.pena.shared.events.OrderItemDto;
+import edu.cit.pena.shared.events.OrderPlacedEvent;
+import edu.cit.pena.shared.events.OrderRejectedEvent;
 
 /**
  * ARCHITECTURAL MODULE BOUNDARY ENFORCEMENT:
@@ -38,17 +39,6 @@ public class OrderService {
         this.eventPublisher = eventPublisher;
     }
 
-    /**
-     * Places a multi-item order following the all-or-nothing transactional rule:
-     * a. Load every line item's current stock via InventoryService.getItem().
-     * b. If ANY line item exceeds available stock, persist an Order with status=REJECTED
-     *    and NO order_items rows, publish an OrderRejected event, return immediately.
-     * c. Only if ALL items pass validation, loop and call InventoryService.reserve() for each item.
-     * d. Persist the Order with status=CONFIRMED and all order_items.
-     * e. Publish OrderPlaced event.
-     * f. If a reserve() call unexpectedly fails at step (c) (race condition), roll back
-     *    the whole transaction by throwing an unchecked exception.
-     */
     @Transactional
     public OrderResponse placeOrder(OrderRequest request) {
         List<OrderItemRequest> reqItems = request != null ? request.getEffectiveItems() : List.of();
@@ -64,13 +54,13 @@ public class OrderService {
             ));
 
             return OrderResponse.rejected(
+                    rejectedOrder.getOrderId(),
                     rejectedOrder.getReason(),
                     List.of(),
                     getInventorySnapshots()
             );
         }
 
-        // a. Load and validate every line item's current stock
         boolean anyFailure = false;
         List<String> failureReasons = new ArrayList<>();
         List<OrderItemDto> eventItems = new ArrayList<>();
@@ -95,43 +85,37 @@ public class OrderService {
             }
         }
 
-        // b. If ANY line item fails, persist REJECTED order with NO order_items rows
         if (anyFailure) {
             String combinedReason = String.join("; ", failureReasons);
             Order rejectedOrder = new Order("REJECTED", combinedReason);
-            // No order_items added to rejectedOrder!
             orderRepository.save(rejectedOrder);
 
-            // Publish OrderRejected event
             eventPublisher.publishEvent(new OrderRejectedEvent(
                     rejectedOrder.getOrderId(),
                     combinedReason,
                     eventItems
             ));
 
-            // On the REJECTED path, every line item in items[] must report outcome=REJECTED
             List<OrderItemOutcome> rejectedOutcomes = reqItems.stream()
                     .map(item -> new OrderItemOutcome(item.productId(), "REJECTED"))
                     .toList();
 
             return OrderResponse.rejected(
+                    rejectedOrder.getOrderId(),
                     combinedReason,
                     rejectedOutcomes,
                     getInventorySnapshots()
             );
         }
 
-        // c. Only if ALL items pass validation, reserve each item in-process
         for (OrderItemRequest itemReq : reqItems) {
             ReservationResult result = inventoryService.reserve(itemReq.productId(), itemReq.quantity());
             if (!result.isSuccess()) {
-                // f. Roll back whole transaction if reserve unexpectedly fails (race condition)
                 throw new IllegalStateException("Reservation failed unexpectedly for "
                         + itemReq.productId() + ": " + result.getReason());
             }
         }
 
-        // d. Persist Order with status=CONFIRMED and all order_items
         String confirmReason = "Order confirmed with " + reqItems.size() + " line item(s).";
         Order confirmedOrder = new Order("CONFIRMED", confirmReason);
         for (OrderItemRequest itemReq : reqItems) {
@@ -139,30 +123,23 @@ public class OrderService {
         }
         orderRepository.save(confirmedOrder);
 
-        // e. Publish OrderPlaced event
         eventPublisher.publishEvent(new OrderPlacedEvent(
                 confirmedOrder.getOrderId(),
                 eventItems
         ));
 
-        // Only on the CONFIRMED path should items report outcome=RESERVED
         List<OrderItemOutcome> confirmedOutcomes = reqItems.stream()
                 .map(item -> new OrderItemOutcome(item.productId(), "RESERVED"))
                 .toList();
 
         return OrderResponse.confirmed(
+                confirmedOrder.getOrderId(),
                 confirmReason,
                 confirmedOutcomes,
                 getInventorySnapshots()
         );
     }
 
-    /**
-     * Cancels an existing order and restocks all its line items:
-     * - 404 if order not found
-     * - 409 if order is already CANCELLED or REJECTED
-     * - Otherwise: set status = CANCELLED, restock each line item, publish OrderCancelled event.
-     */
     @Transactional
     public CancelOrderResult cancelOrder(Long orderId) {
         Order order = orderRepository.findById(orderId).orElse(null);
@@ -182,11 +159,9 @@ public class OrderService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order " + orderId + " is not CONFIRMED and cannot be cancelled.");
         }
 
-        // Set status to CANCELLED
         order.setStatus("CANCELLED");
         order.setReason("Order cancelled by user.");
 
-        // Restock inventory for each line item
         List<OrderItemDto> itemDtos = new ArrayList<>();
         if (order.getItems() != null && !order.getItems().isEmpty()) {
             for (OrderItem item : order.getItems()) {
@@ -197,15 +172,11 @@ public class OrderService {
 
         orderRepository.save(order);
 
-        // Publish OrderCancelled event
         eventPublisher.publishEvent(new OrderCancelledEvent(order.getOrderId(), itemDtos));
 
         return CancelOrderResult.success(OrderDetailsDto.from(order));
     }
 
-    /**
-     * Retrieves all orders for the order history view (newest first).
-     */
     @Transactional(readOnly = true)
     public List<OrderDetailsDto> getAllOrders() {
         return orderRepository.findAllByOrderByCreatedAtDesc()
